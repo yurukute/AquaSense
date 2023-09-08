@@ -1,27 +1,22 @@
-/* VernierLibTutorialAnalogRead (v2017)
- * This sketch reads a data point from a Vernier Analog (BTA) 
- * sensor once every half second and prints the sensor reading 
- * with units to the Serial Monitor.
- * 
- * Plug the sensor into the Analog 1 port on the Vernier Arduino 
- * Interface Shield or into an Analog Protoboard Adapter wired 
- * to Arduino pin A0.
- */
 #include <Arduino.h>
-#include <VernierLib.h> //include Vernier functions in this sketch
-VernierLib Vernier; //create an instance of the VernierLib library
- 
-float sensorReading; //create global variable to store sensor reading
- 
+#include <Artila-Matrix310.h>
+#include <VernierLib32.h>
+#include <HX711.h>
+
+const int interval    = 2000;
+const int sample_rate = 10;     // 10 samples per second
+
+HX711 ADC;
+SSTempSensor TMP;
+
 void setup() {
-  Serial.begin(9600); //setup communication to display
-  Vernier.autoID(); //identify the sensor being used
+    Serial.begin(115200);
+    ADC.begin(DI1, DO1);
 }
 
 void loop() {
-  sensorReading = Vernier.readSensor(); //read one data value
-  Serial.print(sensorReading); //print data value 
-  Serial.print(" "); //print a space
-  Serial.println(Vernier.sensorUnits()); //print units and skip to next line
-  delay(500); //wait half second
+    int rawADC = ADC.read_average(sample_rate);
+    Serial.println((String) "rawADC: " + rawADC);
+    Serial.println((String) "DI1: " + digitalRead(DI1));
+    delay(interval);
 }
