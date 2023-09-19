@@ -1,17 +1,22 @@
 #include "R4AVA07.h"
+#include <arpa/inet.h>
+#include <cstring>
 
 #define READ  0x03
 #define WRITE 0x06
 #define BROADCAST 0xFF
 #define STN_ADDR  0x000E
 #define BAUD_RATE 0x000F
+// Since the module has 7 channels, read data can be up to 14 bytes.
+// plus 1 byte addr, 1 byte function, 1 byte data size and 2 byte CRC.
 #define BUFFER_SIZE 19
 #define ID_MAX 247
+#define DEBUG
 
 #ifdef DEBUG
-#define DEBUG_PRINT(MSG)                        \
-    Serial.printf("%-20s, line %4d: %s\n",      \
-                  __FUNCTION__, __LINE__, MGS);
+#define DEBUG_PRINT(MSG)                                 \
+    Serial.printf("%s, line %4d: ", __func__, __LINE__); \
+    Serial.println((String)MSG);
 #else
 #define DEBUG_PRINT(MSG)
 #endif
@@ -20,7 +25,7 @@
 unsigned short calculateCRC(unsigned char *ptr, int len) {
     unsigned short crc = 0xFFFF;
     while (len--) {
-        crc = (crc >> 8) ^ CRCHi[(crc ^ *ptr++) & 0xff];
+        crc = (crc >> 8) ^ crc_table[(crc ^ *ptr++) & 0xff];
     }
     return (crc);
 }
@@ -30,28 +35,40 @@ bool isValid(uint8_t ch) {
 }
 
 int R4AVA07::send(uint8_t rs485_addr, uint8_t func, uint32_t data) {
+    uint8_t   msg[8] = {0x00};
+    uint8_t *respone = (uint8_t *)malloc(BUFFER_SIZE);
+
     msg[0] = rs485_addr;
     msg[1] = READ;
-    *(u_int32_t *)(&msg[2]) = data;
+    *(u_int32_t *)(&msg[2]) = htonl(data);
     *(u_int16_t *)(&msg[6]) = calculateCRC(&msg[0], 6);
-
+    
     delay(500);
     digitalWrite(rst, HIGH);
 
-    rs485.write((byte *) msg, sizeof(msg));
-    rs485.flush();
+    rs485->write((byte *) msg, sizeof(msg));
+    rs485->flush();
 
     digitalWrite(rst, LOW);
     delay(500);
 
-    if (func == READ)
-        rs485.readBytes(respone, 5 + msg[5]*2);
-    else // if (func == WRITE)
-        rs485.readBytes(respone, sizeof(msg));
-    rs485.flush();
+    int read_size = (func == READ ? 5 + msg[5]*2 : sizeof(msg));
+    rs485->readBytes(respone, read_size);
+    rs485->flush();
 
-    DEBUG_PRINT("Sent message: " + msg);
-    DEBUG_PRINT("Returned message: " + respone);
+#ifdef DEBUG
+    DEBUG_PRINT("Sent message: ");
+    for (int i = 0; i < 8; i++){
+        Serial.printf("%02X ", msg[i]);
+    }
+    Serial.println();
+
+    DEBUG_PRINT("Returned message: ");
+    for (int i = 0; i < read_size; i++){
+        Serial.printf("%02X ", respone[i]);
+    }
+    Serial.println();
+#endif
 
     if (func == READ) {
         uint16_t value = (uint16_t) respone[3] << 8 | respone[4];
@@ -67,27 +84,18 @@ int R4AVA07::send(uint8_t rs485_addr, uint8_t func, uint32_t data) {
     return 0;
 }
 
-
-void R4AVA07::begin(Stream& rs485_port, uint8_t rst_pin = 0) {
+void R4AVA07::begin(Stream* rs485_port, uint8_t rst_pin = 0) {
     rs485 = rs485_port;
     rst = rst_pin;
 
     // Find ID
-    send(BROADCAST, READ, STN_ADDR << 16 | 0x01);
-    ID = respone[3] << 8 | respone[4];
+    ID = send(BROADCAST, READ, STN_ADDR << 16 | 0x01);
 
     // Find baud rate
-    send(ID, READ, BAUD_RATE << 16 | 0x01);
-    switch (respone[2 + msg[5]*2]) {
-    case 0: baud = 1200;  break;
-    case 1: baud = 2400;  break;
-    case 2: baud = 4800;  break;
-    case 3: baud = 9600;  break;
-    case 4: baud = 19200; break;
-    }
+    baud = send(ID, READ, BAUD_RATE << 16 | 0x01);
 }
 
-float R4AVA07::readVoltage(uint16_t ch) {
+float R4AVA07::readVoltage(short ch) {
     if (ch < 1 || ch > 7) {
         DEBUG_PRINT("Invalid channel.");
         return -1;
@@ -97,7 +105,7 @@ float R4AVA07::readVoltage(uint16_t ch) {
     return voltage / 100.0;
 }
 
-float R4AVA07::getVoltageRatio(uint16_t ch) {
+float R4AVA07::getVoltageRatio(short ch) {
     if (ch < 1 || ch > 7) {
         DEBUG_PRINT("Invalid channel.");
         return -1;
@@ -109,11 +117,11 @@ float R4AVA07::getVoltageRatio(uint16_t ch) {
 
 int R4AVA07::setID(short newID) {
     if (newID < 1 || newID > ID_MAX) {
-        DEBUG_PRINT("Invalid ID (1-" ID_MAX ").");
+        DEBUG_PRINT("Invalid ID (1-" + ID_MAX + ").");
         return -1;
     }
     
-    if (send(ID, WRITE, (uint32_t) STN_ADDR << 16 | newID) < 0) {
+    if (send(ID, WRITE, STN_ADDR << 16 | newID) < 0) {
         DEBUG_PRINT("Cannot set ID.");
         return -1;
     }
@@ -122,7 +130,7 @@ int R4AVA07::setID(short newID) {
     return 0;
 }
 
-int R4AVA07::setVoltageRatio(uint8_t ch, float ratio) {
+int R4AVA07::setVoltageRatio(short ch, float ratio) {
     // Channel 1-7 indicated at 0x0007-0x000D.
     uint16_t val = ratio * 1000;
     if (send(ID, WRITE, (uint32_t) (ch+6) << 16 | val) < 0) {
@@ -132,7 +140,7 @@ int R4AVA07::setVoltageRatio(uint8_t ch, float ratio) {
     return 0;
 }
 
-int R4AVA07::changeBaud(uint16_t target_baud) {
+int R4AVA07::setBaudRate(uint16_t target_baud) {
     uint16_t baud_code;
     switch (target_baud) {
     case 1200:  baud_code = 0; break;
@@ -145,7 +153,7 @@ int R4AVA07::changeBaud(uint16_t target_baud) {
         return -1;
     }
 
-    if (send(ID, WRITE, (uint32_t) BAUD_RATE << 16 | baud_code) < 1) {
+    if (send(ID, WRITE, BAUD_RATE << 16 | baud_code) < 1) {
         DEBUG_PRINT("Cannot change baud rate.");
     }
 
@@ -154,5 +162,5 @@ int R4AVA07::changeBaud(uint16_t target_baud) {
 }
 
 void R4AVA07::resetBaud() {
-    send(ID, WRITE, (uint32_t) BAUD_RATE << 16 | 0x05);
+    send(ID, WRITE, BAUD_RATE << 16 | 0x05);
 }
