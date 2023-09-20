@@ -15,8 +15,7 @@ class R4AVA07 {
     // Send command to R4AVA07 and read returned message in buffer
     int send(uint8_t rs485_addr, uint8_t func, uint32_t data);
   public:
-    void begin(Stream* rs485_port, uint8_t rst_pin);
-
+    int begin(Stream* rs485_port, uint8_t rst_pin);
     // Return slave's ID
     short getID()   { return ID; };
     // Return current baud rate

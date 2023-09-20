@@ -1,6 +1,5 @@
 #include "R4AVA07.h"
 #include <arpa/inet.h>
-#include <cstring>
 
 #define READ  0x03
 #define WRITE 0x06
@@ -35,64 +34,78 @@ bool isValid(uint8_t ch) {
 }
 
 int R4AVA07::send(uint8_t rs485_addr, uint8_t func, uint32_t data) {
-    uint8_t   msg[8] = {0x00};
-    uint8_t *respone = (uint8_t *)malloc(BUFFER_SIZE);
+    uint8_t msg[8] = {0x00};
+    uint8_t respone[BUFFER_SIZE];
+    int read_size;
 
     msg[0] = rs485_addr;
     msg[1] = READ;
     *(u_int32_t *)(&msg[2]) = htonl(data);
     *(u_int16_t *)(&msg[6]) = calculateCRC(&msg[0], 6);
     
-    delay(500);
     digitalWrite(rst, HIGH);
+    delay(1);
 
     rs485->write((byte *) msg, sizeof(msg));
     rs485->flush();
 
     digitalWrite(rst, LOW);
-    delay(500);
+    delay(1);
 
-    int read_size = (func == READ ? 5 + msg[5]*2 : sizeof(msg));
-    rs485->readBytes(respone, read_size);
+    read_size = rs485->readBytes(respone, BUFFER_SIZE);
     rs485->flush();
 
 #ifdef DEBUG
-    DEBUG_PRINT("Sent message: ");
+    char buffer[BUFFER_SIZE * 3];
+    char *ptr = buffer;
     for (int i = 0; i < 8; i++){
-        Serial.printf("%02X ", msg[i]);
+        sprintf(ptr, "%02X ", msg[i]);
+        ptr += 3;
     }
-    Serial.println();
-
-    DEBUG_PRINT("Returned message: ");
-    for (int i = 0; i < read_size; i++){
-        Serial.printf("%02X ", respone[i]);
+    *ptr = '\0';
+    DEBUG_PRINT("Send message: " + buffer);
+    if (read_size > 0) {
+        ptr = buffer;
+        for (int i = 0; i < read_size; i++){
+            sprintf(ptr, "%02X ", msg[i]);
+            ptr += 3;
+        }
+        *ptr = '\0';
+        DEBUG_PRINT("Return: " + buffer);
     }
-    Serial.println();
 #endif
 
-    if (func == READ) {
+    if (read_size == 0){
+        DEBUG_PRINT("Send failed.");
+    }
+    else if (func == READ) {
         uint16_t value = (uint16_t) respone[3] << 8 | respone[4];
         return value;
     }
-
-    uint16_t *set_value = (uint16_t *)(&msg[4]);
-    uint16_t *reg_value = (uint16_t *)(&respone[4]);
-
-    if (func == WRITE && *set_value != *reg_value) {
-        return -1;
+    else {
+        uint16_t *set_value = (uint16_t *)(&msg[4]);
+        uint16_t *reg_value = (uint16_t *)(&respone[4]);
+        if(*set_value != *reg_value) {
+            return -1;
+        }
     }
-    return 0;
+    return read_size;
 }
 
-void R4AVA07::begin(Stream* rs485_port, uint8_t rst_pin = 0) {
+int R4AVA07::begin(Stream* rs485_port, uint8_t rst_pin = 0) {
     rs485 = rs485_port;
     rst = rst_pin;
+    pinMode(rst, OUTPUT);
 
     // Find ID
     ID = send(BROADCAST, READ, STN_ADDR << 16 | 0x01);
-
+    if (!ID) { // ID not found.
+        DEBUG_PRINT("Cannot find device address.");
+        return -1;
+    }
     // Find baud rate
     baud = send(ID, READ, BAUD_RATE << 16 | 0x01);
+    return 0;
 }
 
 float R4AVA07::readVoltage(short ch) {
