@@ -11,24 +11,33 @@ SSTempSensor::SSTempSensor() {
 }
 
 void SSTempSensor::switchUnit() {
-    if(strcmp(sensorUnit, "Deg C") == 0){
+    if(strcmp(sensorUnit, "Deg C") == 0) {
         strcpy(sensorUnit, "Deg F");
     }
     else strcpy(sensorUnit, "Deg C");
 }
 
-float SSTempSensor::readSensor(int rawADC) {
-    float value;
-    float lnR = log((1000.0/rawADC-1)*pad);
-
-    value = 1/(K0 + (K1*lnR) + K2*lnR*lnR*lnR);
-    value = value - 273.15; // Kelvin to Celcius
-
+float SSTempSensor::calculateTemp(float resistance) {
+    if (resistance < 0){
+        return -1;
+    }
+    // Dual-purpose variable to save space.
+    float temp = log(resistance); 
+    temp = 1/(K0 + (K1*temp) + K2*temp*temp*temp) - 273.15;
+    
     if (strcmp(sensorUnit, "Deg F") == 0){
-        value = 1.8*value + 32.0; // Convert to Fahrenheit
+        temp = 1.8*temp + 32.0; // Convert to Fahrenheit
     }
 
-    return value;
+    return temp;
+}
+
+float SSTempSensor::readSensor(float voltage) {
+    return calculateTemp(voltage * pad / (5.0 - voltage));
+}
+
+float SSTempSensor::readSensor(int rawADC) {
+    return calculateTemp(rawADC * pad / (1024 - rawADC));
 }
 
 // END OF TEMPSENSOR IMPLEMENTATION.
@@ -40,7 +49,7 @@ ODOSensor::ODOSensor() {
 }
 
 void ODOSensor::switchUnit(){
-    if(strcmp(sensorUnit, "mg/L") == 0){
+    if(strcmp(sensorUnit, "mg/L") == 0) {
         strcpy(sensorUnit, "%");
     }
     else strcpy(sensorUnit, "mg/L");
