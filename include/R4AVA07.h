@@ -1,9 +1,12 @@
 #ifndef R4AVA07_H
 #define R4AVA07_H
 #include <Arduino.h>
+#include <vector>
 #include "sys/_stdint.h"
 #endif
 #define R4AVA07LIB_VERSION "1.0.0"
+
+#define CH_MAX 7
 
 class R4AVA07 {
   private:
@@ -11,6 +14,7 @@ class R4AVA07 {
     short baud;
     Stream* rs485;
     uint8_t rst;
+    uint16_t read_data[CH_MAX];
   protected:
     // Send command to R4AVA07 and read returned message in buffer
     int send(uint8_t rs485_addr, uint8_t func, uint32_t data);
@@ -21,9 +25,9 @@ class R4AVA07 {
     // Return current baud rate
     short getBaud() { return baud; };
     // Read channel's voltage 
-    float readVoltage(short ch);
+    std::vector<float> readVoltage(uint32_t ch, uint8_t number = 0x01);
     // Return channel's voltage ratio
-    float getVoltageRatio(short ch);
+    std::vector<float> getVoltageRatio(uint32_t ch, uint8_t number = 0x01);
 
     // Set slave's ID
     int setID(short new_id);

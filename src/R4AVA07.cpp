@@ -1,4 +1,4 @@
-#include "R4AVA07.h"
+#include <R4AVA07.h>
 #include <arpa/inet.h>
 
 #define READ  0x03
@@ -10,7 +10,6 @@
 // plus 1 byte addr, 1 byte function, 1 byte data size and 2 byte CRC.
 #define BUFFER_SIZE 19
 #define ID_MAX 247
-#define DEBUG
 
 #ifdef DEBUG
 #define DEBUG_PRINT(MSG)                                 \
@@ -30,7 +29,7 @@ unsigned short calculateCRC(unsigned char *ptr, int len) {
 }
 
 bool isValid(uint8_t ch) {
-    return (ch <= 1 && ch <= 7);
+    return (ch >= 1 && ch <= CH_MAX);
 }
 
 int R4AVA07::send(uint8_t rs485_addr, uint8_t func, uint32_t data) {
@@ -58,20 +57,20 @@ int R4AVA07::send(uint8_t rs485_addr, uint8_t func, uint32_t data) {
 #ifdef DEBUG
     char buffer[BUFFER_SIZE * 3];
     char *ptr = buffer;
-    for (int i = 0; i < 8; i++){
+    for (auto i = 0; i < 8; i++){
         sprintf(ptr, "%02X ", msg[i]);
         ptr += 3;
     }
     *ptr = '\0';
-    DEBUG_PRINT("Send message: " + buffer);
+    DEBUG_PRINT("Send message:\t" + buffer);
     if (read_size > 0) {
         ptr = buffer;
-        for (int i = 0; i < read_size; i++){
-            sprintf(ptr, "%02X ", msg[i]);
+        for (auto i = 0; i < read_size; i++){
+            sprintf(ptr, "%02X ", respone[i]);
             ptr += 3;
         }
         *ptr = '\0';
-        DEBUG_PRINT("Return: " + buffer);
+        DEBUG_PRINT("Return:\t" + buffer);
     }
 #endif
 
@@ -79,8 +78,11 @@ int R4AVA07::send(uint8_t rs485_addr, uint8_t func, uint32_t data) {
         DEBUG_PRINT("Send failed.");
     }
     else if (func == READ) {
-        uint16_t value = (uint16_t) respone[3] << 8 | respone[4];
-        return value;
+        for (auto i = 0; i < respone[2]; i++) {
+            // Starting from the 3rd byte, read 2 bytes each.
+            auto pos = 2*i+3;
+            read_data[i] = (uint16_t) respone[pos] << 8 | respone[pos+1];
+        }
     }
     else {
         uint16_t *set_value = (uint16_t *)(&msg[4]);
@@ -98,34 +100,59 @@ int R4AVA07::begin(Stream* rs485_port, uint8_t rst_pin = 0) {
     pinMode(rst, OUTPUT);
 
     // Find ID
-    ID = send(BROADCAST, READ, STN_ADDR << 16 | 0x01);
+    send(BROADCAST, READ, STN_ADDR << 16 | 0x01);
+    ID = read_data[0];
     if (!ID) { // ID not found.
         DEBUG_PRINT("Cannot find device address.");
         return -1;
-    }
+    } else DEBUG_PRINT("Found at: " + ID);
     // Find baud rate
-    baud = send(ID, READ, BAUD_RATE << 16 | 0x01);
+    send(ID, READ, BAUD_RATE << 16 | 0x01);
+    baud = read_data[0];
     return 0;
 }
 
-float R4AVA07::readVoltage(short ch) {
-    if (ch < 1 || ch > 7) {
-        DEBUG_PRINT("Invalid channel.");
-        return -1;
+std::vector<float>  R4AVA07::readVoltage(uint32_t ch, uint8_t number) {
+    if (isValid(ch) == false) {
+        DEBUG_PRINT("Invalid channel: " + ch);
+        return {-1};
+    }
+    if (isValid(ch + number -1) == false) {
+        DEBUG_PRINT("Invalid read number: " + number);
+        return {-1};
     }
     // Channel 1-7 indicated at 0x0000-0x0006.
-    float voltage = send(ID, READ, (uint32_t) (ch-1) << 16 | 0x01);
-    return voltage / 100.0;
+    if (send(ID, READ, (ch-1) << 16 | number) < 1) {
+        DEBUG_PRINT("Cannot read voltage values.");
+        return {-1};
+    }
+    std::vector<float> voltage;
+    for (auto i = 0; i < number; i++) {
+        voltage.push_back((float) read_data[i] / 100.0);
+    }
+    return voltage;
 }
 
-float R4AVA07::getVoltageRatio(short ch) {
-    if (ch < 1 || ch > 7) {
-        DEBUG_PRINT("Invalid channel.");
-        return -1;
+std::vector<float> R4AVA07::getVoltageRatio(uint32_t ch,
+                                            uint8_t number) {
+    if (isValid(ch) == false) {
+        DEBUG_PRINT("Invalid channel: " + ch);
+        return {-1};
+    }
+    if (isValid(ch + number -1) == false) {
+        DEBUG_PRINT("Invalid read number: " + number);
+        return {-1};
     }
     // Channel 1-7 indicated at 0x0007-0x000D.
-    float ratio = send(ID, READ, (uint32_t) (ch+6) << 16 | 0x01);
-    return ratio / 1000.0;
+    if (send(ID, READ, (ch+6) << 16 | number) < 1) {
+        DEBUG_PRINT("Cannot read voltage ratios.");
+        return {-1};
+    }
+    std::vector<float> ratio;
+    for (auto i = 0; i < number; i++) {
+        ratio.push_back((float) read_data[i] / 1000.0);
+    }
+    return ratio;
 }
 
 int R4AVA07::setID(short newID) {
