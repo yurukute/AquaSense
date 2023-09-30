@@ -1,6 +1,6 @@
 #ifndef VernierLib32_h
 #define VernierLib32_h
-#include <math.h>
+#include <cmath>
 #endif
 #define VERNLIB32_VERSION "1.0.0"
 
@@ -10,17 +10,23 @@
 
 class Vernier {
   protected:
+    float Vin = 5.0;
     float slope;
     float intercept;
     char sensorUnit[7];
+
   public:
     virtual ~Vernier() = 0;
     // Return sensor's current unit of measurement.
     char* getSensorUnit()           { return sensorUnit; };
     // Calculate the sensor value from measured voltage.
-    float readSensor(float voltage) { return slope * voltage + intercept; };
+    float readSensor(float voltage);
     // Calculate the sensor value from ADC count.
-    float readSensor(int rawADC) { return slope * rawADC*5.0/1023 + intercept; };
+    float readSensor(int rawADC);
+
+    void setVin(float voltage)      { Vin = voltage; }
+    void setSlope(float value)      { slope = value; }
+    void setIntercept(float value)  { intercept = value; }
 };
 
 // Stainless Steel Temperature sensor.
@@ -33,21 +39,24 @@ class SSTempSensor : public Vernier {
     // Sensor thermistor:
     const int therm = 20000;
     // Schematic:
-    // [GND] -- [Thermistor] ----- | -- [Pad resistor] --[Vcc (5v)]
+    // [GND] -- [Thermistor] ----- | ----- [Resistor] --[Vcc (5v)]
     //                             |
     //                       Analog input
-    // Balance resistor (pad resistor):
-    float pad = 15000;
-    // Return temperature value using Steinhart-Hart equation
-    float calculateTemp(float resistance);
+    //
+    // Vernier's BTA protoboard builtin resistor:
+    float divider = 15000;
+
   public:
     SSTempSensor();
     // Return balance resistance.
-    int getBalanceResistance()       { return pad; };
+    int getDividerResistance()       { return divider; };
     // Set balance resistor value.
-    void setBalanceResistance(int r) { pad = r; };
+    void setDividerResistance(int r) { divider = r; };
     //  Switch between Celcius and Fahrenheit, default is Celcius.
     void switchUnit();
+    // Return temperature value using Steinhart-Hart equation
+    float calculateTemp(float resistance);
+
     float readSensor(float voltage);
     float readSensor(int rawADC);
 };

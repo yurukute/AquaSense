@@ -2,7 +2,17 @@
 #include <VernierLib32.h>
 #include <cstring>
 
+#define RESOLUTION 4096
+
 Vernier::~Vernier() {};
+
+float Vernier::readSensor(float voltage) {
+    return slope * voltage + intercept;
+}
+
+float Vernier::readSensor(int rawADC) {
+    return slope * rawADC*Vin/RESOLUTION + intercept;
+}
 
 SSTempSensor::SSTempSensor() {
     slope = 0;
@@ -22,8 +32,8 @@ float SSTempSensor::calculateTemp(float resistance) {
         return -1;
     }
     // Dual-purpose variable to save space.
-    float temp = log(resistance); 
-    temp = 1/(K0 + (K1*temp) + K2*temp*temp*temp) - 273.15;
+    float temp = log(resistance);
+    temp = 1/(K0 + K1*temp + K2*temp*temp*temp) - 273.15;
     
     if (strcmp(sensorUnit, "Deg F") == 0){
         temp = 1.8*temp + 32.0; // Convert to Fahrenheit
@@ -33,11 +43,11 @@ float SSTempSensor::calculateTemp(float resistance) {
 }
 
 float SSTempSensor::readSensor(float voltage) {
-    return calculateTemp(voltage * pad / (5.0 - voltage));
+    return calculateTemp(voltage * divider / (Vin - voltage));
 }
 
 float SSTempSensor::readSensor(int rawADC) {
-    return calculateTemp(rawADC * pad / (1024 - rawADC));
+    return calculateTemp(rawADC * divider / (RESOLUTION - rawADC));
 }
 
 // END OF TEMPSENSOR IMPLEMENTATION.
