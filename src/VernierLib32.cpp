@@ -14,9 +14,17 @@ float Vernier::readSensor(int rawADC) {
     return slope * rawADC*Vin/RESOLUTION + intercept;
 }
 
+void Vernier::calibrate(float new_slope, float new_intercept) {
+    slope = new_slope;
+    intercept = new_intercept;
+}
+
+// END OF VERNIER IMPLEMENTATION
+
 SSTempSensor::SSTempSensor() {
     slope = 0;
     intercept = 1;
+    responeTime = 10;
     strcpy(sensorUnit, "Deg C");
 }
 
@@ -53,16 +61,23 @@ float SSTempSensor::readSensor(int rawADC) {
 // END OF TEMPSENSOR IMPLEMENTATION.
 
 ODOSensor::ODOSensor() {
-    slope = 1;
-    intercept = 0;
+    slope = 4.444;
+    intercept = -0.4444;
+    responeTime = 40;
     strcpy(sensorUnit, "mg/L");
 }
 
 void ODOSensor::switchUnit(){
     if(strcmp(sensorUnit, "mg/L") == 0) {
+        slope = 66.666;
+        intercept = -6.6666;
         strcpy(sensorUnit, "%");
     }
-    else strcpy(sensorUnit, "mg/L");
+    else {
+        slope = 4.444;
+        intercept = -0.4444;
+        strcpy(sensorUnit, "mg/L");
+    }
 }
 
 // END OF ODOSENSOR IMPLEMENTATION
@@ -70,5 +85,8 @@ void ODOSensor::switchUnit(){
 FPHSensor::FPHSensor() {
     slope = -7.78;
     intercept = 16.34;
+    responeTime = 1;
     sensorUnit[0] = '\0'; // pH don't have unit
 }
+
+// END OF FPHSENSOR IMPLEMENTATION

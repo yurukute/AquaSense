@@ -15,9 +15,11 @@ class R4AVA07 {
     Stream* rs485;
     uint8_t rst;
     uint16_t read_data[CH_MAX];
+
   protected:
     // Send command to R4AVA07 and read returned message in buffer
     int send(uint8_t rs485_addr, uint8_t func, uint32_t data);
+
   public:
     int begin(Stream* rs485_port, uint8_t rst_pin);
     // Return slave's ID

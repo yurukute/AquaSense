@@ -57,7 +57,7 @@ int R4AVA07::send(uint8_t rs485_addr, uint8_t func, uint32_t data) {
 #ifdef DEBUG
     char buffer[BUFFER_SIZE * 3];
     char *ptr = buffer;
-    for (auto i = 0; i < 8; i++){
+    for (auto i = 0; i < sizeof(msg); i++){
         sprintf(ptr, "%02X ", msg[i]);
         ptr += 3;
     }

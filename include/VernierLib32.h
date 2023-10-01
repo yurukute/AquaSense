@@ -13,20 +13,22 @@ class Vernier {
     float Vin = 5.0;
     float slope;
     float intercept;
+    float responeTime;
     char sensorUnit[7];
 
   public:
     virtual ~Vernier() = 0;
     // Return sensor's current unit of measurement.
-    char* getSensorUnit()           { return sensorUnit; };
+    char* getSensorUnit()      { return sensorUnit; }
+    // Return sensor's respone time in seconds.
+    float getResponeTime()     { return responeTime; }
     // Calculate the sensor value from measured voltage.
     float readSensor(float voltage);
     // Calculate the sensor value from ADC count.
     float readSensor(int rawADC);
 
-    void setVin(float voltage)      { Vin = voltage; }
-    void setSlope(float value)      { slope = value; }
-    void setIntercept(float value)  { intercept = value; }
+    void setVin(float voltage) { Vin = voltage; }
+    void calibrate(float slope, float intercept);
 };
 
 // Stainless Steel Temperature sensor.
