@@ -78,7 +78,7 @@ int R4AVA07::send(uint8_t rs485_addr, uint8_t func, uint32_t data) {
         DEBUG_PRINT("Send failed.");
     }
     else if (func == READ) {
-        for (auto i = 0; i < respone[2]; i++) {
+        for (auto i = 0; i < respone[2]/2; i++) {
             // Starting from the 3rd byte, read 2 bytes each.
             auto pos = 2*i+3;
             read_data[i] = (uint16_t) respone[pos] << 8 | respone[pos+1];

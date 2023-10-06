@@ -11,14 +11,17 @@
 #define ODO_CH 2
 #define FPH_CH 3
 
-const int interval       = 500;
-const int sample_rate    = 10;    // 10 samples per second
-const float Rl           = 5860;  // ADC resistance
+const float Rl = 5930.434783; // ADC resistance
+const int sample_rate = 10;   // 10 samples per read
+const int read_num    = 4;    // Number of voltage inputs
 
-std::vector<float> voltage_avg(CH_MAX, 0);
-SSTempSensor TMP;
-ODOSensor ODO;
+std::vector<float> voltage_avg(read_num, 0);
 R4AVA07 ADC;
+
+// Sensor objects
+SSTempSensor TMP;
+ODOSensor    ODO;
+FPHSensor    FPH;
 
 void setup() {
     pinMode(DO1, OUTPUT);
@@ -49,8 +52,8 @@ float readTemp() {
     // Parallel resistance:
     // Rp   = Rt*Rl/(Rt+Rl)
     // Vout = Vin*Rp/(R1+Rp)
-    float pad = TMP.getDividerResistance();
-    float Rp = 1/(vin/(pad*vout) - 1/Rl - 1/pad);
+    float R1 = TMP.getDividerResistance();
+    float Rp = 1/(vin/(R1*vout) - 1/Rl - 1/R1);
     return TMP.calculateTemp(Rp);
 }
 
@@ -59,25 +62,33 @@ float readODO() {
     return ODO.readSensor(vout);
 }
 
-void readVoltage(int start, int num) {
+float readFPH() {
+    float vout = voltage_avg[FPH_CH];
+    return FPH.readSensor(vout);
+}
+
+void readVoltage() {
+    std::fill(voltage_avg.begin(), voltage_avg.end(), 0);
     for (auto i = 0; i < sample_rate; i++) {
         std::transform(voltage_avg.begin(), voltage_avg.end(),
-                       ADC.readVoltage(start,num).begin(),
+                       ADC.readVoltage(1, read_num).begin(),
                        voltage_avg.begin(), std::plus<float>());
     }
+    // Calculate average
     for (auto &v : voltage_avg) {
         v /= sample_rate;
     }
 }
 
 void loop() {
-    readVoltage(1, 3);
-    Serial.println("Voltage read:\n\tCH1\tCH2\tCH3");
+    readVoltage();
+    Serial.printf("Voltage read:\n\tCH1\tCH2\tCH3\tCH4\n");
     for (auto v : voltage_avg) {
         Serial.printf("\t%.2f", v);
     }
     Serial.println();
     Serial.printf("Temperature: %04.2f\n", readTemp());
     Serial.printf("Dissolved oxygen: %04.2f\n", readODO());
-    delay(interval);
+    Serial.printf("pH: %04.2f\n", readFPH());
+    delay(500);
 }
