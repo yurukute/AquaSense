@@ -1,20 +1,22 @@
 #include <R4AVA07.h>
 #include <arpa/inet.h>
 
-#define READ  0x03
-#define WRITE 0x06
-#define BROADCAST 0xFF
-#define STN_ADDR  0x000E
-#define BAUD_RATE 0x000F
+#define MODBUS_READ  0x03
+#define MODBUS_WRITE 0x06
+#define BROADCAST    0xFF
+#define ADDR_REG   0x000E
+#define BAUD_REG   0x000F
 // Since the module has 7 channels, read data can be up to 14 bytes.
 // plus 1 byte addr, 1 byte function, 1 byte data size and 2 byte CRC.
 #define BUFFER_SIZE 19
 #define ID_MAX 247
 
 #ifdef DEBUG
-#define DEBUG_PRINT(MSG)                                 \
+#define                                                  \
+DEBUG_PRINT(MSG) {                                       \
     Serial.printf("%s, line %4d: ", __func__, __LINE__); \
-    Serial.println((String)MSG);
+    Serial.println((String)MSG);                         \
+}
 #else
 #define DEBUG_PRINT(MSG)
 #endif
@@ -38,7 +40,7 @@ int R4AVA07::send(uint8_t rs485_addr, uint8_t func, uint32_t data) {
     int read_size;
 
     msg[0] = rs485_addr;
-    msg[1] = READ;
+    msg[1] = func;
     *(u_int32_t *)(&msg[2]) = htonl(data);
     *(u_int16_t *)(&msg[6]) = calculateCRC(&msg[0], 6);
     
@@ -77,7 +79,7 @@ int R4AVA07::send(uint8_t rs485_addr, uint8_t func, uint32_t data) {
     if (read_size == 0){
         DEBUG_PRINT("Send failed.");
     }
-    else if (func == READ) {
+    else if (func == MODBUS_READ) {
         for (auto i = 0; i < respone[2]/2; i++) {
             // Starting from the 3rd byte, read 2 bytes each.
             auto pos = 2*i+3;
@@ -100,14 +102,14 @@ int R4AVA07::begin(Stream* rs485_port, uint8_t rst_pin = 0) {
     pinMode(rst, OUTPUT);
 
     // Find ID
-    send(BROADCAST, READ, STN_ADDR << 16 | 0x01);
+    send(BROADCAST, MODBUS_READ, ADDR_REG << 16 | 0x01);
     ID = read_data[0];
     if (!ID) { // ID not found.
         DEBUG_PRINT("Cannot find device address.");
         return -1;
     } else DEBUG_PRINT("Found at: " + ID);
     // Find baud rate
-    send(ID, READ, BAUD_RATE << 16 | 0x01);
+    send(ID, MODBUS_READ, BAUD_REG << 16 | 0x01);
     baud = read_data[0];
     return 0;
 }
@@ -122,7 +124,7 @@ std::vector<float>  R4AVA07::readVoltage(uint32_t ch, uint8_t number) {
         return {-1};
     }
     // Channel 1-7 indicated at 0x0000-0x0006.
-    if (send(ID, READ, (ch-1) << 16 | number) < 1) {
+    if (send(ID, MODBUS_READ, (ch-1) << 16 | number) < 1) {
         DEBUG_PRINT("Cannot read voltage values.");
         return {-1};
     }
@@ -144,7 +146,7 @@ std::vector<float> R4AVA07::getVoltageRatio(uint32_t ch,
         return {-1};
     }
     // Channel 1-7 indicated at 0x0007-0x000D.
-    if (send(ID, READ, (ch+6) << 16 | number) < 1) {
+    if (send(ID, MODBUS_READ, (ch+6) << 16 | number) < 1) {
         DEBUG_PRINT("Cannot read voltage ratios.");
         return {-1};
     }
@@ -161,7 +163,7 @@ int R4AVA07::setID(short newID) {
         return -1;
     }
     
-    if (send(ID, WRITE, STN_ADDR << 16 | newID) < 0) {
+    if (send(ID, MODBUS_WRITE, ADDR_REG << 16 | newID) < 0) {
         DEBUG_PRINT("Cannot set ID.");
         return -1;
     }
@@ -173,7 +175,7 @@ int R4AVA07::setID(short newID) {
 int R4AVA07::setVoltageRatio(short ch, float ratio) {
     // Channel 1-7 indicated at 0x0007-0x000D.
     uint16_t val = ratio * 1000;
-    if (send(ID, WRITE, (uint32_t) (ch+6) << 16 | val) < 0) {
+    if (send(ID, MODBUS_WRITE, (uint32_t) (ch+6) << 16 | val) < 0) {
         DEBUG_PRINT("Cannot set voltage ratio");
         return -1;
     }
@@ -193,7 +195,7 @@ int R4AVA07::setBaudRate(uint16_t target_baud) {
         return -1;
     }
 
-    if (send(ID, WRITE, BAUD_RATE << 16 | baud_code) < 1) {
+    if (send(ID, MODBUS_WRITE, BAUD_REG << 16 | baud_code) < 1) {
         DEBUG_PRINT("Cannot change baud rate.");
     }
 
@@ -202,5 +204,5 @@ int R4AVA07::setBaudRate(uint16_t target_baud) {
 }
 
 void R4AVA07::resetBaud() {
-    send(ID, WRITE, BAUD_RATE << 16 | 0x05);
+    send(ID, MODBUS_WRITE, BAUD_REG << 16 | 0x05);
 }
