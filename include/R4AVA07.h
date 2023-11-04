@@ -36,7 +36,7 @@ class R4AVA07 {
     // Set channel's voltage ratio
     int setVoltageRatio(short ch, float val);
     // Change serial  baud rate
-    int setBaudRate(uint16_t baud);
+    int setBaudRate(short target_baud);
     // Reset serial baud rate
     void resetBaud();
 };

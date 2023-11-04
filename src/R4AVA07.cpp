@@ -1,5 +1,9 @@
+#include "sys/_stdint.h"
 #include <R4AVA07.h>
+#include <map>
 #include <arpa/inet.h>
+#include <stdexcept>
+#include <sys/types.h>
 
 #define MODBUS_READ  0x03
 #define MODBUS_WRITE 0x06
@@ -21,6 +25,14 @@ DEBUG_PRINT(MSG) {                                       \
 #define DEBUG_PRINT(MSG)
 #endif
 
+std::map<short, uint16_t> baudrate {
+    {1200, 0},
+    {2400, 1},
+    {4800, 2},
+    {9600, 3},
+    {19200, 4}
+};
+
 // CRC calculation
 unsigned short calculateCRC(unsigned char *ptr, int len) {
     unsigned short crc = 0xFFFF;
@@ -41,8 +53,8 @@ int R4AVA07::send(uint8_t rs485_addr, uint8_t func, uint32_t data) {
 
     msg[0] = rs485_addr;
     msg[1] = func;
-    *(u_int32_t *)(&msg[2]) = htonl(data);
-    *(u_int16_t *)(&msg[6]) = calculateCRC(&msg[0], 6);
+    *(uint32_t *)(&msg[2]) = htonl(data);
+    *(uint16_t *)(&msg[6]) = calculateCRC(&msg[0], 6);
     
     digitalWrite(rst, HIGH);
     delay(1);
@@ -108,9 +120,8 @@ int R4AVA07::begin(Stream* rs485_port, uint8_t rst_pin = 0) {
         DEBUG_PRINT("Cannot find device address.");
         return -1;
     } else DEBUG_PRINT("Found at: " + ID);
-    // Find baud rate
-    send(ID, MODBUS_READ, BAUD_REG << 16 | 0x01);
-    baud = read_data[0];
+
+    baud = 9600;
     return 0;
 }
 
@@ -182,19 +193,15 @@ int R4AVA07::setVoltageRatio(short ch, float ratio) {
     return 0;
 }
 
-int R4AVA07::setBaudRate(uint16_t target_baud) {
+int R4AVA07::setBaudRate(short target_baud) {
     uint16_t baud_code;
-    switch (target_baud) {
-    case 1200:  baud_code = 0; break;
-    case 2400:  baud_code = 1; break;
-    case 4800:  baud_code = 2; break;
-    case 9600:  baud_code = 3; break;
-    case 19200: baud_code = 4; break;
-    default:
-        DEBUG_PRINT("Not supported baud rate");
+    try {
+        baud_code = baudrate.at(target_baud);
+    }
+    catch(std::out_of_range) {
+        DEBUG_PRINT("Invalid baudrate.");
         return -1;
     }
-
     if (send(ID, MODBUS_WRITE, BAUD_REG << 16 | baud_code) < 1) {
         DEBUG_PRINT("Cannot change baud rate.");
     }
