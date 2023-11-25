@@ -5,6 +5,7 @@
 #include <PubSubClient.h>
 #include <WiFi.h>
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include <vector>
 
@@ -14,18 +15,16 @@
 #define FPH_CH 3
 #define BOARD "matrix310"
 
-const int sample_rate = 10;   // 10 samples per read
+const int sample_rate = 1;   // 10 samples per read
 const int read_num    = 4;    // Number of voltage inputs
 
 // WIFI
-const char *wifi_ssid = "ANABAS";
-const char *wifi_pass = "carodong@2023";
+const char *wifi_ssid = "Dung";
+const char *wifi_pass = "12341234";
 
 // MQTT Broker
-const char *mqtt_broker   = "broker.emqx.io";
-const char *mqtt_username = "emqx";
-const char *mqtt_password = "public";
-const int   mqtt_port     = 1883;
+const char *mqtt_broker = "test.mosquitto.org";
+const int   mqtt_port   = 1883;
 
 const char *tmp_topic = BOARD "/vernier/tmp-bta";
 const char *odo_topic = BOARD "/vernier/odo-bta";
@@ -58,7 +57,7 @@ void setup() {
     Serial.begin(115200);
     Serial1.begin(9600, SERIAL_8N1, COM1_RX, COM1_TX);
 
-    Serial.print("Connecting to R4AVA07...");
+    Serial.print("Connecting to ADC...");
     while(ADC.begin(&Serial1, COM1_RTS) < 0) {
         Serial.print(".");
     };
@@ -79,7 +78,7 @@ void setup() {
 
     while (!client.connected()) {
         String id = (String) "matrix310-" + WiFi.macAddress();
-        client.connect(id.c_str(), mqtt_username, mqtt_password);
+        client.connect(id.c_str());
 
         int state = client.state();
         if (state != 0) {
@@ -135,9 +134,17 @@ void readVoltage() {
 }
 
 void publishSensorData(const char *topic, String name, float value) {
-    String msg = name + ": " + String(value);
+    if (isnan(value)) {
+        value = 0.0;
+    }
+    
+    String msg = "{";
+    msg += "\"name\":\"" + name + "\",";
+    msg += "\"value\":" + String(value);
+    msg += "}";
+    
     client.publish(topic, msg.c_str());
-    Serial.println(name + ": " + String(value));
+    Serial.println(msg);
 }
 
 void loop() {
