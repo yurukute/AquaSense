@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <Artila-Matrix310.h>
 #include <VernierLib32.h>
-#include <R4AVA07.h>
+#include <AMVIF08.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
 #include <algorithm>
@@ -12,8 +12,8 @@
 #define TMP_CH 1
 #define ODO_CH 2
 #define FPH_CH 3
+#define BOARD "matrix310"
 
-const float Rl = 5930.434783; // ADC resistance
 const int sample_rate = 10;   // 10 samples per read
 const int read_num    = 4;    // Number of voltage inputs
 
@@ -27,8 +27,12 @@ const char *mqtt_username = "emqx";
 const char *mqtt_password = "public";
 const int   mqtt_port     = 1883;
 
+const char *tmp_topic = BOARD "/vernier/tmp-bta";
+const char *odo_topic = BOARD "/vernier/odo-bta";
+const char *fph_topic = BOARD "/vernier/fph-bta";
+
 std::vector<float> voltage_avg(read_num, 0);
-R4AVA07 ADC;
+AMVIF08 ADC;
 WiFiClient matrix310;
 PubSubClient client(matrix310);
 
@@ -69,11 +73,14 @@ void setup() {
     Serial.println("done.");
 
     Serial.print("Connecting to MQTT broker...");
+
     client.setServer(mqtt_broker, mqtt_port);
     client.setCallback(callback);
+
     while (!client.connected()) {
         String id = (String) "matrix310-" + WiFi.macAddress();
         client.connect(id.c_str(), mqtt_username, mqtt_password);
+
         int state = client.state();
         if (state != 0) {
             Serial.printf("Failed with state (%d)\n", state);
@@ -84,7 +91,6 @@ void setup() {
 }
 
 float readTemp() {
-    float vin  = voltage_avg[VIN_CH];
     float vout = voltage_avg[TMP_CH];
     if (vout == 0.0) {
         return NAN;
@@ -92,19 +98,11 @@ float readTemp() {
     // Schematic:
     //   Rt: Thermistor
     //   R1: Divider resistor (Vernier's BTA protoboard)
-    //   Rl: Load resistor (R4AVA07 ADC)
     //
     // [GND] --- [Rt] ----- | ----- [R1] -----[VCC (5v)]
-    //       |              |
-    //       |-- [Rl] ----- |
     //                      |
     //               [Analog input]
-    // Parallel resistance:
-    // Rp   = Rt*Rl/(Rt+Rl)
-    // Vout = Vin*Rp/(R1+Rp)
-    float R1 = TMP.getDividerResistance();
-    float Rp = 1/(vin/(R1*vout) - 1/Rl - 1/R1);
-    return TMP.calculateTemp(Rp);
+    return TMP.readSensor(vout);
 }
 
 float readODO() {
@@ -136,6 +134,12 @@ void readVoltage() {
     }
 }
 
+void publishSensorData(const char *topic, String name, float value) {
+    String msg = name + ": " + String(value);
+    client.publish(topic, msg.c_str());
+    Serial.println(name + ": " + String(value));
+}
+
 void loop() {
     String msg;
 
@@ -146,17 +150,9 @@ void loop() {
     }
     Serial.println();
 
-    msg = String(readTemp());
-    client.publish("matrix310/vernier/fph-bta", msg.c_str());
-    Serial.println("Temperature: " + msg);
-
-    msg = String(readODO());
-    client.publish("matrix310/vernier/odo-bta", msg.c_str());
-    Serial.println("Dissolved oxygen: " + msg);
-
-    msg = String(readFPH());
-    client.publish("matrix310/vernier/fph-bta", msg.c_str());
-    Serial.println("pH: " + msg);
+    publishSensorData(tmp_topic, "Temperature", readTemp());
+    publishSensorData(odo_topic, "Dissolved oxygen", readODO());
+    publishSensorData(fph_topic, "pH", readFPH());
 
     delay(500);
 }
