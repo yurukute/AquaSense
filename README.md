@@ -4,3 +4,5 @@ An observing system using Vernier sensors to observe the quality of water in var
 - Real-time data collection from water quality sensors, including pH, temperature, dissolved oxygen and decomposition products.
 - Measure and manage the changes of water level.
 - Integration with external systems or databases for data exchange.
+## Interface diagram
+<img src="static/interface.jpg">

@@ -15,12 +15,12 @@
 #define FPH_CH 3
 #define BOARD "matrix310"
 
-const int sample_rate = 1;   // 10 samples per read
+const int sample_rate = 2;    // Samples per read
 const int read_num    = 4;    // Number of voltage inputs
 
 // WIFI
-const char *wifi_ssid = "Dung";
-const char *wifi_pass = "12341234";
+const char *wifi_ssid = "SSID";
+const char *wifi_pass = "P@ssw0rd";
 
 // MQTT Broker
 const char *mqtt_broker = "test.mosquitto.org";
